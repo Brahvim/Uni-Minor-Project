@@ -1,0 +1,21 @@
+{
+	"configurations": [
+		{
+			"compileCommands": "${config:idf.buildPath}/compile_commands.json",
+			"compilerPath": "${default}",
+			"name": "ESP-IDF",
+			"includePath": [
+				"${config:idf.espIdfPath}/components/**",
+				"${workspaceFolder}/**"
+			],
+			"browse": {
+				"path": [
+					// "${config:idf.espIdfPath}/components",
+					"${workspaceFolder}"
+				],
+				"limitSymbolsToIncludedHeaders": true
+			}
+		}
+	],
+	"version": 4
+}

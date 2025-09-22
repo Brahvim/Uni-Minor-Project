@@ -1,1 +1,5 @@
+managed_components/
+Secrets.cmake
 node_modules/
+build/
+.venv/

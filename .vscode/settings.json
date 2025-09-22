@@ -1,0 +1,6 @@
+{
+    "idf.espIdfPath": "/home/brahvim/Espressif/Idf/v5.3.4/",
+    "idf.toolsPath": "/home/brahvim/Espressif/Idf/v5.3.4/tools/",
+    "idf.pythonInstallPath": "/usr/bin/python",
+    "cmake.sourceDirectory": "/home/brahvim/Code/Multi/Uni-Minor-Project/EspCamFw"
+}
