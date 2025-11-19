@@ -2,14 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "gdbtarget",
-      "request": "attach",
-      "name": "Eclipse CDT GDB Adapter"
+      "name": "Python Debugger: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
     },
-    {
-      "type": "espidf",
-      "name": "Launch",
-      "request": "launch"
-    }
+    // {
+    //   "type": "gdbtarget",
+    //   "request": "attach",
+    //   "name": "Eclipse CDT GDB Adapter"
+    // },
+    // {
+    //   "type": "espidf",
+    //   "name": "Launch",
+    //   "request": "launch"
+    // }
   ]
 }
