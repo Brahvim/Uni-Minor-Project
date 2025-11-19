@@ -1,5 +1,10 @@
+yolov11-license-plate-detection/
 managed_components/
 Secrets.cmake
 node_modules/
+secrets.json
+.directory
+**/.cache/
+SECRETS.H
 build/
 .venv/
