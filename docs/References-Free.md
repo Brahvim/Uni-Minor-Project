@@ -1,0 +1,10 @@
+1. https://arxiv.org/abs/2206.14466
+2. https://arxiv.org/abs/2302.13343
+3. https://arxiv.org/abs/2412.10774
+4. https://arxiv.org/abs/2311.12585
+5. https://arxiv.org/abs/2302.07190
+6. https://arxiv.org/abs/2302.00837
+7. https://ejqcia.org/index.php/publication/article/view/33
+8. https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=7247632
+9. https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10292845
+10. https://s3.ap-northeast-2.amazonaws.com/journal-home/journal/jips/fullText/137/jips_644.pdf

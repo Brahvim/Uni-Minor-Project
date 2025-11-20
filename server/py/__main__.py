@@ -93,7 +93,6 @@ def workerThreadOcr():
 
 
 def cbckWockMsg(p_ws, p_msg):
-
     s_queueEspPayloads.put(p_msg)
 
 
@@ -105,7 +104,8 @@ if __name__ == "__main__":
 
     threading.Thread(target=workerThreadDisk, daemon=True).start()
     threading.Thread(target=workerThreadJpeg, daemon=True).start()
-    threading.Thread(target=workerThreadYolo, daemon=True).start()
+    # threading.Thread(target=workerThreadYolo, daemon=True).start()
+    # threading.Thread(target=workerThreadOcr, daemon=True).start()
 
     websocket.WebSocketApp(
         f"ws://{s_espIpStr}:80/stream",
