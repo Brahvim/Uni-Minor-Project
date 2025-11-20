@@ -1,4 +1,6 @@
+from multiprocessing.shared_memory import SharedMemory
 from ultralytics import YOLO
+from llama_cpp import Llama
 from queue import Queue
 import numpy as np
 import threading
@@ -13,6 +15,7 @@ s_queueJpegs = Queue()
 s_queueFiles = Queue()
 
 s_espIpStr = ""
+s_llamaPort = 3000
 s_pathJpegs = "./photos"
 s_pathYolos = "./yolov11-license-plate-detection"
 s_yolo = YOLO(f"{s_pathYolos}/license-plate-finetune-v1n.pt")
@@ -26,7 +29,8 @@ def workerThreadJpeg():
     Converts all ESP32-CAM payloads to `MatLike`s.
     """
     while True:
-        p = s_queueEspPayloads.get()
+        p: bytes = s_queueEspPayloads.get()
+        m = SharedMemory(create=True, size=len(p))
 
         if p is None:
             s_queueEspPayloads.task_done()
@@ -79,13 +83,17 @@ def workerThreadYolo():
             confidence = float(box.conf[0])
             cls = int(box.cls[0])
             label = results.names[cls]
-            print(f"PLATE NUMBER: `{label}`!")
+            # print(f"Plate number: `{label}`!")
 
         s_queueJpegs.task_done()
 
 
+def workerThreadOcr():
+    requests.post(f"http://localhost:{s_llamaPort}/")
+
+
 def cbckWockMsg(p_ws, p_msg):
-    # print("Received JPEG!")
+
     s_queueEspPayloads.put(p_msg)
 
 
@@ -103,5 +111,3 @@ if __name__ == "__main__":
         f"ws://{s_espIpStr}:80/stream",
         on_message=cbckWockMsg
     ).run_forever(),
-
-    # asyncio.run(workerWockFetchEsp(s_espIpStr))

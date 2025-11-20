@@ -4,7 +4,7 @@
 
 camera_config_t g_appCamConfig = {
 
-	// region SCCB config.
+#if 1
 
 	.pin_d0 = 5,
 	.pin_d1 = 18,
@@ -30,11 +30,11 @@ camera_config_t g_appCamConfig = {
 	.ledc_timer = LEDC_TIMER_0,
 	.ledc_channel = LEDC_CHANNEL_0,
 
-	// endregion
+#endif
 
 	.fb_count = 1,
-	.jpeg_quality = 63,
-	.frame_size = FRAMESIZE_XGA,
+	.jpeg_quality = 52,
+	.frame_size = FRAMESIZE_VGA,
 	.pixel_format = PIXFORMAT_JPEG, // `PIXFORMAT_JPEG` for streaming. `PIXFORMAT_RGB565` for face detection and recognition.
 	.grab_mode = CAMERA_GRAB_LATEST,
 	.fb_location = CAMERA_FB_IN_PSRAM,

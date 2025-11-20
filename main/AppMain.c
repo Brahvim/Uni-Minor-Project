@@ -29,19 +29,35 @@ void app_main(void) {
 	}
 
 	ESP_ERROR_CHECK(esp_event_loop_create_default());
-
+	size_t prevLen = g_clientFdsLen;
 	appInitWifi();
 	appInitCam();
 
 	while (true) {
 
-		// ESP_LOGI(s_tag, "Taking picture...");
+		if (g_clientFdsLen == 0) {
+
+			vTaskDelay(pdMS_TO_TICKS(2500));
+			prevLen = g_clientFdsLen;
+			continue;
+
+		}
+		else if (prevLen == 0) {
+
+			ESP_LOGI(s_tag, "First HTTP client connected successfully!");
+			vTaskDelay(pdMS_TO_TICKS(2500));
+			prevLen = g_clientFdsLen;
+			continue;
+
+		}
+
+		prevLen = g_clientFdsLen;
 		camera_fb_t *fb = esp_camera_fb_get();
 		// ESP_LOGI(s_tag, "Picture taken! Bytes: `%zu`.", fb->len);
 
 		for (size_t i = 0; i < g_clientFdsLen; i++) {
 
-			int fd = g_clientFds[i];
+			int const fd = g_clientFds[i];
 
 			if (httpd_ws_get_fd_info(g_httpd, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
 
@@ -55,8 +71,13 @@ void app_main(void) {
 
 				}));
 
-				// #if 0
-				if (!err) {
+				// vTaskDelay(1); // ONE.TICK. For lwIP!
+				vTaskDelay(pdMS_TO_TICKS(4));
+
+#if 1 // Client IP logging.
+
+#if 1 // On success,
+				ifl(!err) {
 
 					struct sockaddr_storage ss;
 					socklen_t len = sizeof(ss);
@@ -101,32 +122,72 @@ void app_main(void) {
 					continue;
 
 				}
-				// #endif
+#endif
+
+#if 1 // On Failure.
+			else {
+
+				struct sockaddr_storage ss;
+				socklen_t len = sizeof(ss);
+
+				if (!getpeername(fd, (void*) &ss, &len)) {
+
+					switch (ss.ss_family) {
+
+						case AF_INET: {
+
+							struct sockaddr_in *in = (void*) &ss;
+
+							ESP_LOGW(
+								s_tag,
+								"Failed to send frame to %d@%s:%d",
+								i,
+								ip4addr_ntoa((void*) &in->sin_addr),
+								ntohs(in->sin_port)
+							);
+
+
+						} break;
+
+						case AF_INET6: {
+
+							struct sockaddr_in6 *in = (void*) &ss;
+
+							ESP_LOGW(
+								s_tag,
+								"Failed to send frame to %d@[%s]:%d",
+								i,
+								ip6addr_ntoa((void*) &in->sin6_addr),
+								ntohs(in->sin6_port)
+							);
+
+						} break;
+
+					}
+
+				}
+
+			}
+#endif
+
+#endif // Client IP logging.
+
 			}
 
+			// Client broke connection; swap it out for the next [potentially servicable] client:
 			int const t = g_clientFds[g_clientFdsLen - 1];
-			// g_clientFds[i] = fd = t;
 			g_clientFds[i] = t;
 			g_clientFdsLen--;
 			i--;
-			// goto check;
 
 		}
 
 		esp_camera_fb_return(fb);
-		// vTaskDelay(5000 / portTICK_PERIOD_MS); // 5s wait.
-		// vTaskDelay(8 / portTICK_PERIOD_MS); // 64ms wait, i.e. 4 FPS.
 
 	}
 }
 
 esp_err_t appEspCbckEndptStream(struct httpd_req *const p_request) {
-	// if (p_request->method != HTTP_POST) {
-	//
-	// 	return ESP_ERR_HTTPD_INVALID_REQ;
-	//
-	// }
-
 	int const reqFd = httpd_req_to_sockfd(p_request);
 	if (httpd_ws_get_fd_info(g_httpd, reqFd) != HTTPD_WS_CLIENT_WEBSOCKET) {
 
@@ -158,11 +219,11 @@ void appEspCbckWifiIp(void *p_args, esp_event_base_t p_base, int32_t p_id, void 
 }
 
 void appEspCbckWifiLost(void *p_args, esp_event_base_t p_base, int32_t p_id, void *p_data) {
-	ESP_LOGI(s_tag, "Wi-F Lost...");
+	ESP_LOGI(s_tag, "Wi-Fi Lost...");
 	esp_wifi_connect();
 }
 
 void appEspCbckWifiStart(void *p_args, esp_event_base_t p_base, int32_t p_id, void *p_data) {
-	ESP_LOGI(s_tag, "Wi-F Started.");
+	ESP_LOGI(s_tag, "Wi-Fi Started.");
 	esp_wifi_connect();
 }
