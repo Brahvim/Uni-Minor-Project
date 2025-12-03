@@ -12,10 +12,10 @@ import json
 import cv2
 
 # region Vars.
-# These `float`s are Unix timestamps.
-s_queueLlama: Queue[tuple[float, MatLike]] = Queue()
-s_queueYolo: Queue[tuple[float, MatLike]] = Queue()
-s_queueSave: Queue[tuple[float, bytes]] = Queue()
+# These `int`s are Unix timestamps.
+s_queueYolo: Queue[tuple[int, MatLike, bytes]] = Queue()
+s_queueLlama: Queue[tuple[int, MatLike]] = Queue()
+s_queueSave: Queue[tuple[int, bytes]] = Queue()
 s_queueEsp: Queue[bytes] = Queue()
 
 with open("secrets.json") as f:
@@ -51,7 +51,7 @@ def workerThreadLlama():
     then requests the llama.cpp API to provide label.
     """
     cur = s_dbLlama.cursor()
-    sql = "UPDATE entries SET plate = %s WHERE tstamp = %s; COMMIT;"
+    sql = "UPDATE entries SET plate = %s WHERE tstamp = %s;"
     prompt = "The image may contain a vehicle license plate. If so, respond with *just* said number in full. In case of any issues, respond with just \"NULL\" without the quotes."
     while True:
         tstamp, crop = s_queueLlama.get()
@@ -74,23 +74,7 @@ def workerThreadLlama():
         jpegB64 = base64.b64encode(jpeg)
         jpegB64Utf8 = jpegB64.decode("utf-8")
 
-        # payload = {
-        #     "role": "user",
-        #     "content": [
-        #         {
-        #             "type": "image_url",
-        #             "image_url": {
-        #                 "url": f"data:image/jpeg;base64,{jpegB64Utf8}"
-        #             }
-        #         },
-        #         {
-        #             "type": "text",
-        #             "text":  prompt
-        #         }
-        #     ]
-        # }
-
-        payload = {
+        reqBody = {
             "model": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
             "messages": [
                 {
@@ -111,10 +95,10 @@ def workerThreadLlama():
             ]
         }
 
-        print(f"Trying to read plate {tstamp}...")
+        # print(f"Trying to read plate {tstamp}...")
         resHttp = requests.post(
             f"{s_llamaUrl}/v1/chat/completions",
-            json=payload,
+            json=reqBody,
             timeout=30,
         )
 
@@ -128,6 +112,7 @@ def workerThreadLlama():
 
             print(f"Plate `{plate}` seen.")
             cur.execute(sql, (plate, tstamp))
+            s_dbLlama.commit()
         except requests.HTTPError as e:
             print(e)
             pass
@@ -153,8 +138,8 @@ def workerThreadEsp():
             s_queueEsp.task_done()
             continue
 
-        tstamp = time.time()
-        s_queueYolo.put((tstamp, jpeg))
+        tstamp = int(time.time() * 1000)  # Converts to millis.
+        s_queueYolo.put((tstamp, jpeg, p))
         s_queueEsp.task_done()
 
 
@@ -164,20 +149,16 @@ def workerThreadSave():
     """
     cur = s_dbSave.cursor()
     # These shall NEVER BE F-STRINGS!:
-    sql = f"INSERT INTO entries(tstamp) VALUES(%s); COMMIT;"
+    sql = f"INSERT INTO entries(tstamp) VALUES(%s);"
     # EASIEST way to get injection attacks!
     while True:
         tstamp, payload = s_queueSave.get()
 
-        if payload is None:
-            s_queueSave.task_done()
-            continue
-
-        tstamp = time.time()
         with open(f"{s_pathJpegs}/{tstamp}.jpg", "wb") as f:
             f.write(payload)
 
         cur.execute(sql, (tstamp,))
+        s_dbSave.commit()
         s_queueSave.task_done()
 
 
@@ -186,7 +167,7 @@ def workerThreadYolo():
     Runs YOLOv11 inference for LPR and notifies Express.
     """
     while True:
-        tstamp, jpeg = s_queueYolo.get()
+        tstamp, jpeg, payload = s_queueYolo.get()
         rgb = jpeg[:, :, ::-1]  # Bgr2Rgb!
         # results = s_yolo.predict(source=rgb)
         results = s_yolo.predict(source=rgb, verbose=False)
@@ -214,8 +195,8 @@ def workerThreadYolo():
                     continue
 
                 # print("CROPPED!")
-                s_queueSave.put((tstamp, jpeg))
                 s_queueLlama.put((tstamp, crop))
+                s_queueSave.put((tstamp, payload))
 
         s_queueYolo.task_done()
 
