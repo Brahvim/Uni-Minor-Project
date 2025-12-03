@@ -38,5 +38,21 @@
     ],
     "idf.pythonInstallPath": "/usr/bin/python3",
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
-    "idf.flashType": "UART"
+    "idf.flashType": "UART",
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MariaDB",
+            "username": "root",
+            "database": "quickpark",
+            "name": "Quickpark"
+        }
+    ]
 }
