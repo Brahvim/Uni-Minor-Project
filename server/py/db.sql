@@ -1,5 +1,7 @@
 CREATE DATABASE IF NOT EXISTS quickpark;
+USE quickpark;
 CREATE TABLE IF NOT EXISTS entries(tstamp DOUBLE PRIMARY KEY, plate VARCHAR(32));
 DESCRIBE entries;
 SELECT *
 FROM entries;
+-- DROP DATABASE IF EXISTS quickpark;

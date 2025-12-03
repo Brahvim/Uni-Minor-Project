@@ -1,4 +1,3 @@
-from multiprocessing.shared_memory import SharedMemory
 from cv2.typing import MatLike
 from ultralytics import YOLO
 from queue import Queue
@@ -13,10 +12,11 @@ import json
 import cv2
 
 # region Vars.
-s_queueCrops: Queue[tuple[float, MatLike]] = Queue()
-s_queueEspPayloads: Queue[bytes] = Queue()
-s_queueJpegs: Queue[MatLike] = Queue()
-s_queueFiles: Queue[MatLike] = Queue()
+# These `float`s are Unix timestamps.
+s_queueLlama: Queue[tuple[float, MatLike]] = Queue()
+s_queueYolo: Queue[tuple[float, MatLike]] = Queue()
+s_queueSave: Queue[tuple[float, bytes]] = Queue()
+s_queueEsp: Queue[bytes] = Queue()
 
 with open("secrets.json") as f:
     s_secrets = json.load(f)
@@ -24,7 +24,6 @@ with open("secrets.json") as f:
 s_espIpStr = ""
 s_llamaPort = 3000
 s_pathJpegs = "./photos"
-s_llamaUrl = f"http://localhost:{s_llamaPort}"
 # Not using a `mysql.connector.pooling.MySQLConnectionPool()` this time...
 s_dbSave = mysql.connector.connect(
     database="quickpark",
@@ -38,6 +37,7 @@ s_dbLlama = mysql.connector.connect(
     host=s_secrets["dbHost"],
     password=s_secrets["dbPass"],
 )
+s_llamaUrl = f"http://localhost:{s_llamaPort}"
 s_pathYolos = "./yolov11-license-plate-detection"
 s_yolo = YOLO(f"{s_pathYolos}/license-plate-finetune-v1n.pt")
 # endregion
@@ -53,15 +53,10 @@ def workerThreadLlama():
     cur = s_dbLlama.cursor()
     sql = "UPDATE entries SET plate = %s WHERE tstamp = %s; COMMIT;"
     while True:
-        tstamp, crop = s_queueCrops.get()
-
-        print("CONNECTING TO LLAMA SERVER!")
-        print("CONNECTING TO LLAMA SERVER!")
-        print("CONNECTING TO LLAMA SERVER!")
-
+        tstamp, crop = s_queueLlama.get()
         ok, jpeg = cv2.imencode(".jpg", crop)
         if not ok:
-            s_queueCrops.task_done()
+            s_queueLlama.task_done()
             continue
 
         # On my machine with a GTX 1650:
@@ -89,7 +84,7 @@ def workerThreadLlama():
                         },
                         {
                             "type": "input_image",
-                            "image_url": f"data:image/jpeg;base64,{b64}"
+                            "image": f"data:image/jpeg;base64,{b64}"
                         }
                     ]
                 }
@@ -111,34 +106,34 @@ def workerThreadLlama():
                 plate = "NULL"
 
             cur.execute(sql, (plate, tstamp))
-        except requests.HTTPErrore as e:
+        except requests.HTTPError as e:
             print(e)
             pass
 
-        s_queueCrops.task_done()
+        s_queueLlama.task_done()
 
 
-def workerThreadJpeg():
+def workerThreadEsp():
     """
     Converts all ESP32-CAM payloads to `MatLike`s.
     """
     while True:
-        p = s_queueEspPayloads.get()
+        p = s_queueEsp.get()
 
         if p is None:
-            s_queueEspPayloads.task_done()
+            s_queueEsp.task_done()
             continue
 
         int8 = np.frombuffer(p, dtype=np.uint8)
         jpeg = cv2.imdecode(int8, cv2.IMREAD_COLOR)
 
         if jpeg is None:
-            s_queueEspPayloads.task_done()
+            s_queueEsp.task_done()
             continue
 
-        s_queueFiles.put(p)
-        s_queueJpegs.put(jpeg)
-        s_queueEspPayloads.task_done()
+        tstamp = time.time()
+        s_queueYolo.put((tstamp, jpeg))
+        s_queueEsp.task_done()
 
 
 def workerThreadSave():
@@ -150,10 +145,10 @@ def workerThreadSave():
     sql = f"INSERT INTO entries(tstamp) VALUES(%s); COMMIT;"
     # EASIEST way to get injection attacks!
     while True:
-        payload = s_queueFiles.get()
+        tstamp, payload = s_queueSave.get()
 
         if payload is None:
-            s_queueFiles.task_done()
+            s_queueSave.task_done()
             continue
 
         tstamp = time.time()
@@ -161,7 +156,7 @@ def workerThreadSave():
             f.write(payload)
 
         cur.execute(sql, (tstamp,))
-        s_queueFiles.task_done()
+        s_queueSave.task_done()
 
 
 def workerThreadYolo():
@@ -169,43 +164,62 @@ def workerThreadYolo():
     Runs YOLOv11 inference for LPR and notifies Express.
     """
     while True:
-        jpeg: cv2.MatLike = s_queueJpegs.get()
-        rgb = jpeg[:, :, ::-1]
-        results = s_yolo.predict(source=rgb)
+        tstamp, jpeg = s_queueYolo.get()
+        rgb = jpeg[:, :, ::-1]  # Bgr2Rgb!
+        # results = s_yolo.predict(source=rgb)
+        results = s_yolo.predict(source=rgb, verbose=False)
 
-        if not hasattr(results, "boxes"):
-            s_queueJpegs.task_done()
-            continue
+        for r in results:
+            for b in r.boxes:
+                x1, y1, x2, y2 = map(int, b.xyxy[0].tolist())
 
-        for box in results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
-            # confidence = float(box.conf[0])
-            # cls = int(box.cls[0])
-            # label = results.names[cls]
-            crop = jpeg[y1:y2, x1:x2]
+                # Clamp validly!:
+                x1 = max(0, min(x1, rgb.shape[1]-1))
+                x2 = max(0, min(x2, rgb.shape[1]-1))
+                y1 = max(0, min(y1, rgb.shape[0]-1))
+                y2 = max(0, min(y2, rgb.shape[0]-1))
 
-            if crop is not None and crop.size != 0:
-                s_queueCrops.put(crop)
+                # Some are invalid, apparently..!:
+                if x2 <= x1 or y2 <= y1:
+                    # print("INVALID!")
+                    continue
 
-        s_queueJpegs.task_done()
+                crop = rgb[y1:y2, x1:x2]
+
+                # ...and others, empty...:
+                if crop.size == 0:
+                    # print("EMPTY!")
+                    continue
+
+                # print("CROPPED!")
+                s_queueSave.put((tstamp, jpeg))
+                s_queueLlama.put((tstamp, crop))
+
+        s_queueYolo.task_done()
 
 
-def cbckWockMsg(p_ws, p_msg):
-    s_queueEspPayloads.put(p_msg)
+def cbckWockMsg(p_ws: websocket.WebSocketApp, p_msg):
+    s_queueEsp.put(p_msg)
+
+
+def cbckWockOpen(p_ws: websocket.WebSocketApp):
+    print(f"Connected to `{p_ws.url}`!")
 
 
 # endregion
 
 if __name__ == "__main__":
-    print("Please enter the ESP32's IP address...!: ", end="")
-    s_espIpStr = input()
+    # print("Please enter the ESP32's IP address...!: ", end="")
+    s_espIpStr = s_secrets["ip"]
+    # s_espIpStr = input()
 
     threading.Thread(target=workerThreadSave, daemon=True).start()
-    threading.Thread(target=workerThreadJpeg, daemon=True).start()
+    threading.Thread(target=workerThreadEsp, daemon=True).start()
     threading.Thread(target=workerThreadYolo, daemon=True).start()
     threading.Thread(target=workerThreadLlama, daemon=True).start()
 
     websocket.WebSocketApp(
         f"ws://{s_espIpStr}:80/stream",
-        on_message=cbckWockMsg
+        on_message=cbckWockMsg,
+        on_open=cbckWockOpen,
     ).run_forever(),
