@@ -52,6 +52,7 @@ def workerThreadLlama():
     """
     cur = s_dbLlama.cursor()
     sql = "UPDATE entries SET plate = %s WHERE tstamp = %s; COMMIT;"
+    prompt = "The image may contain a vehicle license plate. If so, respond with *just* said number in full. In case of any issues, respond with just \"NULL\" without the quotes."
     while True:
         tstamp, crop = s_queueLlama.get()
         ok, jpeg = cv2.imencode(".jpg", crop)
@@ -70,7 +71,24 @@ def workerThreadLlama():
         #
         # nvrun ./llama.cpp/llama-server --port 3000 --n-gpu-layers 2 -m ./Qwen3VL-2B-Instruct-Q4_K_M.gguf --mmproj ./mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf
 
-        b64 = base64.b64encode(jpeg).decode("utf-8")
+        jpegB64 = base64.b64encode(jpeg)
+        jpegB64Utf8 = jpegB64.decode("utf-8")
+
+        # payload = {
+        #     "role": "user",
+        #     "content": [
+        #         {
+        #             "type": "image_url",
+        #             "image_url": {
+        #                 "url": f"data:image/jpeg;base64,{jpegB64Utf8}"
+        #             }
+        #         },
+        #         {
+        #             "type": "text",
+        #             "text":  prompt
+        #         }
+        #     ]
+        # }
 
         payload = {
             "model": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
@@ -79,18 +97,21 @@ def workerThreadLlama():
                     "role": "user",
                     "content": [
                         {
-                            "type": "input_text",
-                            "text": "The image may contain a vehicle license plate. If so, respond with *just* said number in full. In case of any issues, respond with just \"NULL\" without the quotes."
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{jpegB64Utf8}"
+                            }
                         },
                         {
-                            "type": "input_image",
-                            "image": f"data:image/jpeg;base64,{b64}"
+                            "type": "text",
+                            "text": prompt,
                         }
                     ]
                 }
             ]
         }
 
+        print(f"Trying to read plate {tstamp}...")
         resHttp = requests.post(
             f"{s_llamaUrl}/v1/chat/completions",
             json=payload,
@@ -105,6 +126,7 @@ def workerThreadLlama():
             if len(plate) > 32:
                 plate = "NULL"
 
+            print(f"Plate `{plate}` seen.")
             cur.execute(sql, (plate, tstamp))
         except requests.HTTPError as e:
             print(e)
