@@ -10,6 +10,7 @@ import base64
 import time
 import json
 import cv2
+import re
 
 # region Vars.
 # These `int`s are Unix timestamps.
@@ -52,7 +53,7 @@ def workerThreadLlama():
     """
     cur = s_dbLlama.cursor()
     sql = "UPDATE entries SET plate = %s WHERE tstamp = %s;"
-    prompt = "The image may contain a vehicle license plate. If so, respond with *just* said number in full. In case of any issues, respond with just \"NULL\" without the quotes."
+    prompt = "The image may contain a vehicle license plate. If so, respond with *just* said number in full. In case of any issues, respond with just \"NULL\" without the quotes. Some plates may use the format `↑ 01Z 012345A`; make use of the broad arrow."
     while True:
         tstamp, crop = s_queueLlama.get()
         ok, jpeg = cv2.imencode(".jpg", crop)
@@ -70,6 +71,9 @@ def workerThreadLlama():
         # *One liner!:*
         #
         # nvrun ./llama.cpp/llama-server --port 3000 --n-gpu-layers 2 -m ./Qwen3VL-2B-Instruct-Q4_K_M.gguf --mmproj ./mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf
+        #
+        # PS *Do* use `-n 32` so the model simply *can't* output more tokens.
+        # DEFINITELY also use a grammar...!
 
         jpegB64 = base64.b64encode(jpeg)
         jpegB64Utf8 = jpegB64.decode("utf-8")
@@ -107,8 +111,9 @@ def workerThreadLlama():
             resJson = resHttp.json()
             plate: str = resJson["choices"][0]["message"]["content"]
 
-            if len(plate) > 32:
-                plate = "NULL"
+            if len(plate) > 32 or plate == "NULL":
+                s_queueLlama.task_done()
+                return
 
             print(f"Plate `{plate}` seen.")
             cur.execute(sql, (plate, tstamp))
