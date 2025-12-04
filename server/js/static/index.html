@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Quickpark</title>
+</head>
+
+<body>
+
+	<div id="entries-container">
+		<div id="entries"></div>
+	</div>
+
+	<button id="minus">➖</button>
+	<button id="plus">➕</button>
+	<h3>Quickpark</h3>
+
+</body>
+
+<style>
+	html,
+	body {
+		margin: 0;
+		height: 100%;
+		font-family: sans-serif;
+	}
+
+	body {
+		gap: 10%;
+		display: flex;
+		align-items: center;
+		flex-direction: column;
+		justify-content: center;
+	}
+
+	button {
+		width: 90px;
+		height: 90px;
+		border: none;
+		cursor: pointer;
+		font-size: 3rem;
+		border-radius: 18px;
+		background: #c1c1c1;
+		backdrop-filter: blur(8px);
+		box-shadow:
+			0px 0px 15px rgba(255, 255, 255, 0.05),
+			inset 0px 0px 10px rgba(255, 255, 255, 0.1);
+
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.2s ease,
+			background 0.2s ease;
+		color: #ececec;
+	}
+
+	button:hover {
+		transform: scale(1.1);
+		background: #575757;
+		box-shadow:
+			0 0 25px rgba(255, 255, 255, 0.1),
+			inset 0 0 12px rgba(255, 255, 255, 0.15);
+	}
+
+	button:active {
+		transform: scale(0.95);
+	}
+
+	#minus {
+		left: 2%;
+		top: 90%;
+		position: fixed;
+		transform: translateY(-50%);
+	}
+
+	#plus {
+		top: 90%;
+		right: 2%;
+		position: fixed;
+		transform: translateY(-50%);
+	}
+
+	#entries-container {
+		height: 80vh;
+		display: flex;
+		overflow-y: auto;
+		flex-direction: row;
+	}
+</style>
+
+<script type="module">
+	import { endpointFrontries } from "/protocol.mjs";
+
+	let offset = 0; // How far we are in time.
+	document.getElementById("plus").onclick = () => { offset++; load(); };
+	document.getElementById("minus").onclick = () => { offset = Math.max(0, offset - 1); load(); };
+
+	function formatDate(p_date) {
+		const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+		let hours = p_date.getHours();
+		const meridian = hours >= 12 ? "PM" : "AM";
+		const minutes = p_date.getMinutes().toString().padStart(2, "0");
+
+		hours = hours % 12;
+		if (hours === 0) {
+
+			hours = 12;
+
+		}
+
+		const day = p_date.getDate().toString().padStart(2, "0");
+		const month = months[p_date.getMonth()];
+		const year = p_date.getFullYear();
+
+		return `${hours}:${minutes} ${meridian} ${day} ${month}, ${year}`;
+
+	}
+
+	async function load() {
+		const divEntriesContainer = document.getElementById("entries");
+		divEntriesContainer.innerHTML = "Loading...";
+
+		try {
+
+			const res = await fetch(`/frontries?offset=${offset}`, {
+
+				cache: "no-store"   // No caching!
+
+			});
+			divEntriesContainer.innerHTML = "";
+			const json = await res.json(); // `[{ tstamp, plate, image }]` from back!
+
+			// console.log(json);
+
+			if (res.status != 200) {
+
+				const error = json["err"];
+
+				switch (error) {
+
+					case endpointFrontries.db: {
+
+						divEntriesContainer.innerHTML = error;
+
+
+					} break;
+
+					default: {
+
+					} break;
+				}
+
+			}
+
+			json.forEach(p_entry => {
+
+				const divParent = document.createElement("div");
+				divParent.style.justifyContent = "center";
+				divParent.style.flexDirection = "row";
+				divParent.style.alignItems = "center";
+				divParent.style.marginBottom = "2%";
+				divParent.style.marginLeft = "20%";
+				divParent.style.display = "flex";
+
+				const paraMeta = document.createElement("p");
+				paraMeta.textContent = `#${p_entry["plate"]}, ${formatDate(new Date(p_entry["tstamp"]))}`;
+
+				const anchorImage = document.createElement("a");
+				anchorImage.style.justifyContent = "center";
+				anchorImage.style.flexDirection = "row";
+				anchorImage.style.alignItems = "center";
+				anchorImage.style.display = "flex";
+
+				const imgImage = document.createElement("img");
+				imgImage.src = `data:image/jpeg;base64,${p_entry["image"]}`;
+				anchorImage.href = `/${p_entry["tstamp"]}.jpg`;
+				imgImage.src = `/${p_entry["tstamp"]}.jpg`;
+				imgImage.style.height = "50%";
+				imgImage.style.width = "50%";
+				imgImage.loading = "eager";  // Force-load...
+
+				divParent.appendChild(paraMeta);
+				anchorImage.appendChild(imgImage);
+				divParent.appendChild(anchorImage);
+
+				divEntriesContainer.appendChild(divParent);
+
+			});
+
+		} catch (e) {
+
+			divEntriesContainer.innerHTML = "Error loading entries.";
+			console.error(e);
+
+		}
+	}
+
+	load();
+</script>
+
+</html>

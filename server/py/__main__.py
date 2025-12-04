@@ -19,12 +19,18 @@ s_queueLlama: Queue[tuple[int, MatLike]] = Queue()
 s_queueSave: Queue[tuple[int, bytes]] = Queue()
 s_queueEsp: Queue[bytes] = Queue()
 
-with open("secrets.json") as f:
+with open("../secrets.json") as f:
     s_secrets = json.load(f)
+
+if s_secrets:
+    print("Secrets OK!...")
+else:
+    print("Secrets file not found...")
+    exit(1)
 
 s_espIpStr = ""
 s_llamaPort = 3000
-s_pathJpegs = "./photos"
+s_pathJpegs = "../photos"
 # Not using a `mysql.connector.pooling.MySQLConnectionPool()` this time...
 s_dbSave = mysql.connector.connect(
     database="quickpark",
@@ -111,7 +117,8 @@ def workerThreadLlama():
             resJson = resHttp.json()
             plate: str = resJson["choices"][0]["message"]["content"]
 
-            if len(plate) > 32 or plate == "NULL":
+            if plate == "NULL":
+                # if len(plate) > 32 or plate == "NULL":
                 s_queueLlama.task_done()
                 return
 
@@ -199,7 +206,7 @@ def workerThreadYolo():
                     # print("EMPTY!")
                     continue
 
-                # print("CROPPED!")
+                print("Detected plate!")
                 s_queueLlama.put((tstamp, crop))
                 s_queueSave.put((tstamp, payload))
 
@@ -221,13 +228,16 @@ if __name__ == "__main__":
     s_espIpStr = s_secrets["ip"]
     # s_espIpStr = input()
 
-    threading.Thread(target=workerThreadSave, daemon=True).start()
     threading.Thread(target=workerThreadEsp, daemon=True).start()
+    threading.Thread(target=workerThreadSave, daemon=True).start()
     threading.Thread(target=workerThreadYolo, daemon=True).start()
     threading.Thread(target=workerThreadLlama, daemon=True).start()
+    print("Threads OK...")
 
-    websocket.WebSocketApp(
+    wock = websocket.WebSocketApp(
         f"ws://{s_espIpStr}:80/stream",
         on_message=cbckWockMsg,
         on_open=cbckWockOpen,
-    ).run_forever(),
+    )
+    print("Wock OK...")
+    wock.run_forever(),
