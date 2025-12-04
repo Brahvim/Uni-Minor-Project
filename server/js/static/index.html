@@ -91,9 +91,25 @@
 <script type="module">
 	import { endpointFrontries } from "/protocol.mjs";
 
-	let offset = 0; // How far we are in time.
-	document.getElementById("plus").onclick = () => { offset++; load(); };
-	document.getElementById("minus").onclick = () => { offset = Math.max(0, offset - 1); load(); };
+	let g_offset = 0; // How far we are in the DB per 5 elements.
+	let g_lastJson = []; // Array of last server-side results.
+	document.getElementById("plus").onclick = () => {
+
+		if (g_lastJson.length != 0) {
+
+			g_offset++;
+			load();
+
+		}
+
+	};
+
+	document.getElementById("minus").onclick = () => {
+
+		g_offset = Math.max(0, g_offset - 1);
+		load();
+
+	};
 
 	function formatDate(p_date) {
 		const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -114,7 +130,6 @@
 		const year = p_date.getFullYear();
 
 		return `${hours}:${minutes} ${meridian} ${day} ${month}, ${year}`;
-
 	}
 
 	async function load() {
@@ -123,7 +138,7 @@
 
 		try {
 
-			const res = await fetch(`/frontries?offset=${offset}`, {
+			const res = await fetch(`/frontries?offset=${g_offset}`, {
 
 				cache: "no-store"   // No caching!
 
@@ -131,7 +146,7 @@
 			divEntriesContainer.innerHTML = "";
 			const json = await res.json(); // `[{ tstamp, plate, image }]` from back!
 
-			// console.log(json);
+			console.log(json);
 
 			if (res.status != 200) {
 
@@ -150,6 +165,14 @@
 
 					} break;
 				}
+
+			}
+
+			g_lastJson = json;
+
+			if (json.length == 0) {
+
+				divEntriesContainer.innerHTML = "There are no more entries. Please go back!";
 
 			}
 
@@ -187,6 +210,7 @@
 				divEntriesContainer.appendChild(divParent);
 
 			});
+
 
 		} catch (e) {
 
