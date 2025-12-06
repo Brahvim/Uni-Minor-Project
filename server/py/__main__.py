@@ -80,6 +80,14 @@ def workerThreadLlama():
         #
         # PS *Do* use `-n 32` so the model simply *can't* output more tokens.
         # DEFINITELY also use a grammar...!
+        # `nvrun` is a bash script as follows:
+        #  GBM_BACKEND=nvidia-drm
+        #  CUDA_VISIBLE_DEVICES=1
+        #  __GLX_DRISWRAST_ALLOW=1
+        #  LIBVA_DRIVER_NAME=nvidia
+        #  __NV_PRIME_RENDER_OFFLOAD=1
+        #  __GLX_VENDOR_LIBRARY_NAME=nvidia
+
 
         jpegB64 = base64.b64encode(jpeg)
         jpegB64Utf8 = jpegB64.decode("utf-8")

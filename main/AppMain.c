@@ -174,7 +174,7 @@ void app_main(void) {
 
 			}
 
-			// Client broke connection; swap it out for the next [potentially servicable] client:
+			// Client broke connection; swap it out for the next [potentially serviceable] client:
 			int const t = g_clientFds[g_clientFdsLen - 1];
 			g_clientFds[i] = t;
 			g_clientFdsLen--;
