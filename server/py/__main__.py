@@ -88,7 +88,6 @@ def workerThreadLlama():
         #  __NV_PRIME_RENDER_OFFLOAD=1
         #  __GLX_VENDOR_LIBRARY_NAME=nvidia
 
-
         jpegB64 = base64.b64encode(jpeg)
         jpegB64Utf8 = jpegB64.decode("utf-8")
 
@@ -248,4 +247,4 @@ if __name__ == "__main__":
         on_open=cbckWockOpen,
     )
     print("Wock OK...")
-    wock.run_forever(),
+    wock.run_forever()

@@ -113,10 +113,9 @@
 
 	function formatDate(p_date) {
 		const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-		let hours = p_date.getHours();
-		const meridian = hours >= 12 ? "PM" : "AM";
 		const minutes = p_date.getMinutes().toString().padStart(2, "0");
+		const meridian = hours >= 12 ? "PM" : "AM";
+		let hours = p_date.getHours();
 
 		hours = hours % 12;
 		if (hours === 0) {

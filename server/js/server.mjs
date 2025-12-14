@@ -48,7 +48,7 @@ s_app.get("/frontries", async (p_request, p_response) => {
 
 			});
 
-		};
+		}
 
 		p_response.json(res);
 
